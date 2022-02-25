@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: http-client
+  labels:
+    app: hpa-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hpa-client
+  template:
+    metadata:
+      labels:
+        app: hpa-client
+    spec:
+      containers:
+      - name: cpuload
+        image: quasarstack/flask:v1
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - mountPath: /data/httpclient.py
+          subPath: httpclient.py
+          name: httpclient
+      volumes:
+      - name: httpclient
+        configMap:
+          name: autoscale-client
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: autoscale-client
+  labels:
+    app: hpa-client
+data:
+  "httpclient.py": |
+      import requests
+      # AutoScaler Server side app URL(k8s service url)
+      url = "http://172.30.99.118/cpu"
+      def httpclient():
+          r = requests.get(url=url)
+          return r.text
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: http-client
+spec:
+  type: NodePort
+  selector:
+    app: hpa-client
+  ports:
+  - port: 80
+    targetPort: 8080

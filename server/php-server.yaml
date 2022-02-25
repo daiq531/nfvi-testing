@@ -1,0 +1,116 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: autoscale-server
+  labels:
+    app: autoscale-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: autoscale-server
+  template:
+    metadata:
+      labels:
+        app: autoscale-server
+    spec:
+      containers:
+        - name: cpuload
+          image: quasarstack/flask:v1
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+#            - mountPath: /var/www/html
+#              name: php-scripts
+            - mountPath: /data/cpuload.py
+              subPath: cpuload.py
+              name: cpuload
+      volumes:
+#        - name: php-scripts
+#          configMap:
+#            name: autoscale-scripts
+        - name: cpuload
+          configMap:
+            name: autoscale-cpuload
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: autoscale-cpuload
+  labels:
+    app: autoscale-server
+data:
+  "cpuload.py": |
+    import math
+    import time
+
+    def squareroot():
+        etime = {}
+        start_time = time.time()
+        for x in range(1, 1000000):
+            s = math.sqrt(x)
+        end_time = time.time()
+        time_taken = end_time - start_time
+        etime["start_time"] = start_time
+        etime["end_time"] = end_time
+        etime["time_taken"] = time_taken
+        return etime
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: autoscale-scripts
+  labels:
+    app: autoscale-server
+data:
+  "cpuload.php" : |
+    <?php
+    $started = microtime(true);
+    // CPU stress test
+    for($i = 0; $i < 30000000; $i++) {
+        $a = sqrt($i);
+    }
+    $ended = microtime(true);
+    if (!empty($_GET['print'])) {
+        echo '       Php: ' . PHP_VERSION ."\n";
+    //    echo '   Started: ' . $started ."\n";
+    //    echo '     Ended: ' . $ended ."\n";
+        echo 'Total Time: ' . round( $ended - $started, 4)."\n";
+    }
+    ?>
+  "cpuload-crypt.php": |
+    <?php
+    $started = microtime(true);
+    $string = 'letsburnsomecpu';
+    $key = 'mysupersecretkey';
+    $method = 'AES256';
+    $iv = 'aninsecureivhere';
+    $times_run = 0;
+    while ( $times_run < 500000 ) {
+            $encrypted = openssl_encrypt( $string, $method, $key, null, $iv );
+            $decrypted = openssl_decrypt( $encrypted, $method, $key, null, $iv );
+            $times_run++;
+    }
+    $ended = microtime(true);
+    if (!empty($_GET['print'])) {
+        echo '       Php: ' . PHP_VERSION ."\n";
+    //    echo '   Started: ' . $started ."\n";
+    //    echo '     Ended: ' . $ended ."\n";
+        echo 'Total Time: ' . round( $ended - $started, 4)."\n";
+    }
+  "memload.php": |
+    # memload script
+  "blkload.php": |
+    # block IO Load script
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: autoscale-server
+spec:
+  type: ClusterIP
+  selector:
+    app: autoscale-server
+  ports:
+  - port: 80
+    targetPort: 8080
