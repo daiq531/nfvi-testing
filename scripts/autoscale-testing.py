@@ -1,11 +1,12 @@
 import requests
 from concurrent.futures import ThreadPoolExecutor
 
+# Use client.sh to retrive this info
 khost="compute5.ec2.calenglab.spirentcom.com"
 svc_port="32151"
 
 k6url = "http://" + khost + ':' + svc_port + '/'
-connections_count = 10
+connections_count = 100
 
 def get_url(url):
     return requests.get(url)
