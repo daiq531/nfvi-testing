@@ -14,6 +14,8 @@ spec:
       labels:
         app: hpa-client
     spec:
+      strategy:
+        type: Recreate
       containers:
       - name: cpuload
         image: quasarstack/flask:v1
@@ -25,7 +27,7 @@ spec:
           subPath: httpclient.py
           name: httpclient
       volumes:
-      - name: httpclient
+      - name: apacheconf
         configMap:
           name: autoscale-client
 
@@ -40,7 +42,7 @@ data:
   "httpclient.py": |
       import requests
       # AutoScaler Server side app URL(k8s service url)
-      url = "http://172.30.99.118/cpu"
+      url = "http://localhost/cpu"
       def httpclient():
           r = requests.get(url=url)
           return r.text
@@ -50,9 +52,9 @@ kind: Service
 metadata:
   name: http-client
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
-    app: hpa-client
+    app: http-client
   ports:
   - port: 80
     targetPort: 8080
