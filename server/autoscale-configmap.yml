@@ -9,6 +9,10 @@ data:
   "cpuload.py": |
      import math
      import time
+     """ Client app sends GET request to server app container
+     http://<autoscale-server Service Cluster IP>/cpu, which triggers
+     this function to create cpu load in container
+     """
      def cpuload():
          etime = {}
          start_time = time.time()

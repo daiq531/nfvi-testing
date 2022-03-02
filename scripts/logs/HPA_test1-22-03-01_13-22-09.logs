@@ -1,0 +1,90 @@
+Connections:
+  - id: 0
+  elapse_time: 0:00:19.219791
+  server_text: {
+  "end_time": 1646162548.3114202, 
+  "start_time": 1646162537.7118814, 
+  "time_taken": 10.599538803100586
+}
+
+
+  - id: 1
+  elapse_time: 0:00:15.118407
+  server_text: {
+  "end_time": 1646162543.4149988, 
+  "start_time": 1646162532.3118436, 
+  "time_taken": 11.103155136108398
+}
+
+
+  - id: 2
+  elapse_time: 0:00:19.921183
+  server_text: {
+  "end_time": 1646162549.413522, 
+  "start_time": 1646162537.813092, 
+  "time_taken": 11.600430011749268
+}
+
+
+  - id: 3
+  elapse_time: 0:00:16.615627
+  server_text: {
+  "end_time": 1646162544.107237, 
+  "start_time": 1646162530.2123656, 
+  "time_taken": 13.894871473312378
+}
+
+
+  - id: 4
+  elapse_time: 0:00:16.321506
+  server_text: {
+  "end_time": 1646162544.7093208, 
+  "start_time": 1646162529.9144428, 
+  "time_taken": 14.794878005981445
+}
+
+
+  - id: 5
+  elapse_time: 0:00:14.210221
+  server_text: {
+  "end_time": 1646162543.011902, 
+  "start_time": 1646162530.3068936, 
+  "time_taken": 12.705008506774902
+}
+
+
+  - id: 6
+  elapse_time: 0:00:18.516653
+  server_text: {
+  "end_time": 1646162547.9129217, 
+  "start_time": 1646162529.8070095, 
+  "time_taken": 18.10591220855713
+}
+
+
+  - id: 7
+  elapse_time: 0:00:16.412563
+  server_text: {
+  "end_time": 1646162544.6099792, 
+  "start_time": 1646162529.7182786, 
+  "time_taken": 14.891700506210327
+}
+
+
+  - id: 8
+  elapse_time: 0:00:19.707660
+  server_text: {
+  "end_time": 1646162548.911806, 
+  "start_time": 1646162534.2068505, 
+  "time_taken": 14.704955577850342
+}
+
+
+  - id: 9
+  elapse_time: 0:00:19.916962
+  server_text: {
+  "end_time": 1646162549.4122872, 
+  "start_time": 1646162537.511872, 
+  "time_taken": 11.900415182113647
+}
+
