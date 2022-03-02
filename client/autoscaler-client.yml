@@ -27,7 +27,7 @@ spec:
           subPath: httpclient.py
           name: httpclient
       volumes:
-      - name: httpclient
+      - name: apacheconf
         configMap:
           name: autoscale-client
 
@@ -52,7 +52,7 @@ kind: Service
 metadata:
   name: http-client
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: http-client
   ports:
