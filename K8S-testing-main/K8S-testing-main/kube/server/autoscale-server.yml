@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: autoscale-server
+  labels:
+    app: autoscale-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: autoscale-server
+  template:
+    metadata:
+      labels:
+        app: autoscale-server
+    spec:
+      strategy:
+        type: Recreate
+      containers:
+      - name: cpuload
+        image: quasarstack/flask:v1
+        resources:
+          requests:
+            memory: "1024Mi"
+            cpu: "100m"
+          limits:
+            memory: "1024Mi"
+            cpu: "100m"
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - mountPath: /data/cpuload.py
+          subPath: cpuload.py
+          name: cpuload
+      volumes:
+      - name: cpuload
+        configMap:
+          name: autoscale-cpuload
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: autoscale-server
+spec:
+  type: ClusterIP
+  selector:
+    app: autoscale-server
+  ports:
+  - port: 80
+    targetPort: 8080

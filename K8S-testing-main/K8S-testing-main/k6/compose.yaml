@@ -1,0 +1,5 @@
+  k6:
+    image: loadimpact/k6:latest
+    command: run /script.js
+    volumes:
+        - ./script.js:/script.js
