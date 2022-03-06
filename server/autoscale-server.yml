@@ -14,8 +14,6 @@ spec:
       labels:
         app: autoscale-server
     spec:
-      strategy:
-        type: Recreate
       containers:
       - name: cpuload
         image: quasarstack/flask:v1

@@ -14,19 +14,22 @@ http_client_svc_external_port = "32151"
 kube_hpa = "cpuload-hpa"
 
 k6url = "http://" + http_client_svc_external_ip + ':' + http_client_svc_external_port + '/'
-connections_count = 500
+connections_count = 10
+iterate_count = 2
 
 d = datetime.now().strftime('%y-%m-%d_%H-%M-%S')
 test_name = "HPA_test1-"
 
 log_file = os.path.join(os.path.dirname(os.path.realpath(__file__)) + '/logs/' + test_name + str(d) + 'hpa-state.logs')
-tmp_file = os.path.join(os.path.dirname(os.path.realpath(__file__)) + '/logs/' + '-hpa.json')
+tmp_file = os.path.join(os.path.dirname(os.path.realpath(__file__)) + '/logs/' + 'hpa.json')
+tmp_file_1 = os.path.join(os.path.dirname(os.path.realpath(__file__)) + '/logs/' + 'hpa_1.json')
+tmp_file_2 = os.path.join(os.path.dirname(os.path.realpath(__file__)) + '/logs/' + 'hpa_2.json')
 server_response_file = os.path.join(os.path.dirname(os.path.realpath(__file__)) + '/logs/' + test_name + str(d) + '-server.log')
 
 def get_url(url):
     return requests.get(url)
 
-def generate_load():
+def generate_load(urls):
     with ThreadPoolExecutor(max_workers=connections_count) as pool:
         response_list = list(pool.map(get_url, urls))
         return response_list
@@ -47,20 +50,45 @@ def write_logs(response_from_server,elapse_time,connections_count):
 
 
 def spinner():
+    #hpa_state_data = []
+    count = 1
     while True:
+        #current_state = {}
         record_time = datetime.now().strftime('%y%m%d_%H%M%S')
         os.system('kubectl get hpa {} -o json > {}'.format(kube_hpa, tmp_file))
         with open(tmp_file, 'r') as input_file:
             data = json.load(input_file)
+        """current_state = {
+            'date': record_time,
+            'name': data['metadata']['name'],
+            'min_replicas': data['spec']['minReplicas'],
+            'max_replicas': data['spec']['maxReplicas'],
+            'current_replicas': data['status']['currentReplicas'],
+            'desired_replicas': data['status']['desiredReplicas']
+        }"""
         with open(log_file, 'a') as output_file:
-            output_file.write('\n\date: {}\n'.format(record_time))
+            output_file.write('\ndate: {}\n'.format(record_time))
             output_file.write('  name: {}\n'.format(data['metadata']['name']))
             output_file.write('  min_replicas: {}\n'.format(data['spec']['minReplicas']))
             output_file.write('  max_replicas: {}\n'.format(data['spec']['maxReplicas']))
             output_file.write('  current_replicas: {}\n'.format(data['status']['currentReplicas']))
             output_file.write('  desired_replicas: {}\n'.format(data['status']['desiredReplicas']))
+        """hpa_state_data.append(current_state)
+        if len(hpa_state_data) > 0:
+            with open(log_file, 'a') as output_file:
+                output_file.write(str(hpa_state_data))"""
         time.sleep(5)
         
+"""     
+    output_file.write('\n\date: {}\n'.format(record_time))
+    output_file.write('  name: {}\n'.format(data['metadata']['name']))
+            output_file.write('  min_replicas: {}\n'.format(data['spec']['minReplicas']))
+            output_file.write('  max_replicas: {}\n'.format(data['spec']['maxReplicas']))
+            output_file.write('  current_replicas: {}\n'.format(data['status']['currentReplicas']))
+            output_file.write('  desired_replicas: {}\n'.format(data['status']['desiredReplicas']))
+
+"""        
+   
 def current_value(before_load, after_load):
     l1 = []
     l2 = []
@@ -80,10 +108,11 @@ def current_value(before_load, after_load):
         else:
             print("HPA not happened")
 
-if __name__ == "__main__":
-    _thread.start_new_thread(spinner, ())
+
+def load_generation_req():
     urls = [k6url]*connections_count
-    load = generate_load()
+    load = generate_load(urls)
+
     response_from_server = []
     _elapse_time = []
 
@@ -93,14 +122,60 @@ if __name__ == "__main__":
         _elapse_time.append(str(load[req_start_count].elapsed))
         req_start_count += 1
     write_logs(response_from_server, _elapse_time, connections_count)
-    """ Files cleanup """
-    os.remove(tmp_file)
+
+
+def iteration_fun():
+    os.system('kubectl get hpa {} -o json > {}'.format(kube_hpa, tmp_file_1))
+    with open(tmp_file_1, 'r') as input_file:
+            data = json.load(input_file)
+    current_replicas =  data['status']['currentReplicas']
+    desired_replicas =  data['spec']['maxReplicas']
+
+    if current_replicas < desired_replicas:
+        count = 1
+        while count <= iterate_count:
+            load_generation_req()
+            print("I am here!")
+            os.system('kubectl get hpa {} -o json > {}'.format(kube_hpa, tmp_file_2))
+            with open(tmp_file_2, 'r') as input_file_1:
+                data_1 = json.load(input_file_1)
+            current_replicas =  data_1['status']['currentReplicas']
+            desired_replicas =  data_1['spec']['maxReplicas']
+            count += 1
+
+
+
+if __name__ == "__main__":
+    _thread.start_new_thread(spinner, ())
+    print('hello')
+    load_generation_req()
+    """os.system('kubectl get hpa {} -o json > {}'.format(kube_hpa, tmp_file_1))
+    with open(tmp_file_1, 'r') as input_file:
+            data = json.load(input_file)
+    current_replicas =  data['status']['currentReplicas']
+    desired_replicas =  data['spec']['maxReplicas']
+    print(current_replicas)
+    print(desired_replicas)"""
+    iteration_fun()
     
-"""    rs=os.system('kubectl get rs -o wide > rs_details_before_load-' + str(d) +'.log')
-    hpa=os.system('kubectl get hpa -o wide > hpa_details_before_load-' + str(d) +'.log')
-    pods=os.system('kubectl get pods -o wide > pods_details_before_load-' + str(d)+'.log')
-    rs=os.system('kubectl get rs -o json > rs_details_before_load-' + str(d) +'.json')
-    rs=os.system('kubectl get rs -o wide > rs_details_after_load-' + str(d) +'.logs')
-    hpa=os.system('kubectl get hpa -o wide > hpa_details_after_load-' + str(d)+'.log')
-    pods=os.system('kubectl get pods -o wide > pods_details_after_load-' + str(d)+'.log')
-    rs=os.system('kubectl get rs -o json > rs_details_after_load-' + str(d) +'.json')"""
+    """ File Cleanup """
+    #os.remove(tmp_file)
+
+
+        
+        
+
+
+    """urls = [k6url]*connections_count
+    load = generate_load()
+
+    response_from_server = []
+    _elapse_time = []
+
+    req_start_count = 0
+    while req_start_count < connections_count:
+        response_from_server.append(load[req_start_count].text)
+        _elapse_time.append(str(load[req_start_count].elapsed))
+        req_start_count += 1
+    write_logs(response_from_server, _elapse_time, connections_count)"""
+    """ Files cleanup """
