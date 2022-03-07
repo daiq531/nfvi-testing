@@ -37,7 +37,7 @@ def generate_load(urls):
 def write_logs(response_from_server,elapse_time,connections_count):
     try:
         attempts = range(0,connections_count)
-        print("Test results will be captured in {}".format(server_response_file))
+        #print("Test results will be captured in {}".format(server_response_file))
         with open(server_response_file, 'a') as f:
             f.write('Connections:')
             for c in attempts:
@@ -135,7 +135,7 @@ def iteration_fun():
         count = 1
         while count <= iterate_count:
             load_generation_req()
-            print("I am here!")
+            #print("I am here!")
             os.system('kubectl get hpa {} -o json > {}'.format(kube_hpa, tmp_file_2))
             with open(tmp_file_2, 'r') as input_file_1:
                 data_1 = json.load(input_file_1)
@@ -147,7 +147,7 @@ def iteration_fun():
 
 if __name__ == "__main__":
     _thread.start_new_thread(spinner, ())
-    print('hello')
+    #print('hello')
     load_generation_req()
     """os.system('kubectl get hpa {} -o json > {}'.format(kube_hpa, tmp_file_1))
     with open(tmp_file_1, 'r') as input_file:
