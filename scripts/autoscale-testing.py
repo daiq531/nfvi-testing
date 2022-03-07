@@ -7,7 +7,20 @@ import json
 import _thread
 import time
 import subprocess
+import sys
 
+"""
+- March 7:
+    1. On each iteration, add 3 mins wait
+    2. Break the loop in two matching conditions (Can we apply and condition over there?)
+        - iterate_count is completed
+        - OR Pods reached to max replica
+    3. End of each iteration, record on which node the pod was running
+    4. Fetch 'http_client_svc_external_ip' and 'http_client_svc_external_port' vars values during run time
+        Check scripts/get-http-client-url.sh for reference
+    5. Take 'iterate_count' vaule as user input or argument
+    5. Cleanup of temp files
+"""
 # Fetch ip and port using 'get-http-client-url.sh' and update here
 http_client_svc_external_ip = "compute5.ec2.calenglab.spirentcom.com"
 http_client_svc_external_port = "32151"
@@ -15,16 +28,20 @@ kube_hpa = "cpuload-hpa"
 
 k6url = "http://" + http_client_svc_external_ip + ':' + http_client_svc_external_port + '/'
 connections_count = 10
-iterate_count = 2
+iterate_count = int(sys.argv[1])
+#3count = 1
 
 d = datetime.now().strftime('%y-%m-%d_%H-%M-%S')
 test_name = "HPA_test1-"
 
 log_file = os.path.join(os.path.dirname(os.path.realpath(__file__)) + '/logs/' + test_name + str(d) + 'hpa-state.logs')
+pod_node_file = os.path.join(os.path.dirname(os.path.realpath(__file__)) + '/logs/' + test_name + str(d) + 'pod-node-details.logs')
 tmp_file = os.path.join(os.path.dirname(os.path.realpath(__file__)) + '/logs/' + 'hpa.json')
 tmp_file_1 = os.path.join(os.path.dirname(os.path.realpath(__file__)) + '/logs/' + 'hpa_1.json')
 tmp_file_2 = os.path.join(os.path.dirname(os.path.realpath(__file__)) + '/logs/' + 'hpa_2.json')
 server_response_file = os.path.join(os.path.dirname(os.path.realpath(__file__)) + '/logs/' + test_name + str(d) + '-server.log')
+tmp_file_3 = os.path.join(os.path.dirname(os.path.realpath(__file__)) + '/logs/' + 'hpa_3.json')
+
 
 def get_url(url):
     return requests.get(url)
@@ -122,6 +139,10 @@ def load_generation_req():
         _elapse_time.append(str(load[req_start_count].elapsed))
         req_start_count += 1
     write_logs(response_from_server, _elapse_time, connections_count)
+    pod_node_details()
+    time.sleep(180)
+    """Implement point 3 here"""
+
 
 
 def iteration_fun():
@@ -133,7 +154,8 @@ def iteration_fun():
 
     if current_replicas < desired_replicas:
         count = 1
-        while count <= iterate_count:
+        while count <= iterate_count or current_replicas == desired_replicas:
+            print("iteration count")
             load_generation_req()
             #print("I am here!")
             os.system('kubectl get hpa {} -o json > {}'.format(kube_hpa, tmp_file_2))
@@ -142,6 +164,18 @@ def iteration_fun():
             current_replicas =  data_1['status']['currentReplicas']
             desired_replicas =  data_1['spec']['maxReplicas']
             count += 1
+
+
+def pod_node_details():
+    os.system('kubectl get pods -o json > {}'.format(tmp_file_3))
+    record_time = datetime.now().strftime('%y%m%d_%H%M%S')
+    with open(tmp_file_3, 'r') as input_file_1:
+        data = json.load(input_file_1)
+    with open(pod_node_file, 'a') as output_file:
+        output_file.write('\ndate: {}\n'.format(record_time))
+        for d in data['items']:
+            output_file.write('  pod_name: {}\n'.format(d['metadata']['name']))
+            output_file.write('  node_name: {}\n'.format(d['spec']['nodeName']))
 
 
 
@@ -159,7 +193,10 @@ if __name__ == "__main__":
     iteration_fun()
     
     """ File Cleanup """
-    #os.remove(tmp_file)
+    os.remove(tmp_file)
+    os.remove(tmp_file_1)
+    os.remove(tmp_file_2)
+    os.remove(tmp_file_3)
 
 
         
