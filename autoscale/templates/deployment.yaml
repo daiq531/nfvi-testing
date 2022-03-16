@@ -37,6 +37,10 @@ spec:
             - name: http
               containerPort: 8080
               protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
@@ -63,26 +67,68 @@ spec:
       {{- end }}
 
 ---
-apiVersion: v1
-kind: Pod
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: {{ .Values.clientName }}-pod
+  name: {{ .Values.clientName }}-deployment
   labels:
     app: http-client
 spec:
-  containers:
-  - name: http-client
-    image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-    imagePullPolicy: IfNotPresent
-    ports:
-    - containerPort: 8080
-    volumeMounts:
-    - mountPath: /data
-      name: client-script
-  volumes:
-  - name: client-script
-    configMap:
-      name: autoscale-script
-      items:
-        - key: client.py
-          path: app.py
+  replicas: 1
+  selector:
+    matchLabels:
+      app: http-client
+  template:
+    metadata:
+      labels:
+        app: http-client
+    spec:
+      containers:
+        - name: http-client
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: IfNotPresent
+          ports:
+          - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+          volumeMounts:
+          - mountPath: /data
+            name: client-script
+      volumes:
+      - name: client-script
+        configMap:
+          name: autoscale-script
+          items:
+            - key: client.py
+              path: app.py
+
+# ---
+# apiVersion: v1
+# kind: Pod
+# metadata:
+#   name: {{ .Values.clientName }}-pod
+#   labels:
+#     app: http-client
+# spec:
+#   containers:
+#   - name: http-client
+#     image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+#     imagePullPolicy: IfNotPresent
+#     ports:
+#     - containerPort: 8080
+#     readinessProbe:
+#       httpGet:
+#         path: /
+#         port: 8080
+#     volumeMounts:
+#     - mountPath: /data
+#       name: client-script
+#   volumes:
+#   - name: client-script
+#     configMap:
+#       name: autoscale-script
+#       items:
+#         - key: client.py
+#           path: app.py

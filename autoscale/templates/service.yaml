@@ -20,7 +20,7 @@ kind: Service
 metadata:
   name: {{ .Values.clientName }}-svc
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   selector:
     app: http-client
   ports:

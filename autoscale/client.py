@@ -7,7 +7,8 @@ from flask import Flask, request, Response, make_response
 
 class HttpRequestClient(Thread):
 
-    TIMER_INTERVAL = 0.01
+    TIMER_INTERVAL = 1
+    DEFAULT_COUNT = 100000
 
     def __init__(self, url: str, rate: int):
         super().__init__()
@@ -15,47 +16,53 @@ class HttpRequestClient(Thread):
         self.rate = rate
         self.timer = None
         self.queue = SimpleQueue()
-        self.flag_stop = False
+        self.run_flag = True
 
     def timer_function(self):
         current = time.monotonic()
         
         # caculate http request count based on rate and actual timer interval
         duration = current - self.rate_begin_time
-        count = (duration + TIMER_INTERVAL) * rate - self.sent
-        self.queue.put_nowait(http_count)
-
-        self.previous_mono = current
-
-    def start_timer(self):
-        self.timer = Timer(HttpRequestClient.TIMER_INTERVAL, self.timer_function)
-        self.previous_mono = time.monotonic()
+        count = int((duration + self.TIMER_INTERVAL) * self.rate / 60 - self.sent_reqs)
+        if count > 0:
+            self.queue.put_nowait(count)
+        
+        # restart timer
+        self.timer = Timer(self.TIMER_INTERVAL, self.timer_function)
         self.timer.start()
 
     def run(self):
-        self.start = time.monotonic()
-        self.timer = Timer(HttpRequestClient.TIMER_INTERVAL, self.timer_function)
+        self.sent_reqs = 0
+        self.rate_begin_time = time.monotonic()
+        self.timer = Timer(self.TIMER_INTERVAL, self.timer_function)
         self.timer.start()
 
-        while not self.flag_stop:
+        while self.run_flag:
             # get request count from queue
             request_count = self.queue.get()
-            print("request_count: %f" % request_count)
-            request_count = 1
-            if request_count == 0:
-                continue
-
+            print("current queue size after get one: {}".format(self.queue.qsize()))
+            cpu_load_duration = 0
+            begin = time.monotonic()
             for i in range(request_count):
-                resp = requests.get(self.url)
+                resp = requests.get(self.url, params={"count": self.DEFAULT_COUNT})
+                cpu_load_duration += float(resp.text)
                 resp.close()
-                print("resp len: %d" % resp.length)
-
-    def stop(self):
-        self.flag_stop = True
-        self.timer.cancel()
+            self.sent_reqs += request_count
+            end = time.monotonic()
+            total_duration = end - begin
+            print("request count: {}, cpu load_duration: {}, total_duration: {}".format(request_count, cpu_load_duration, total_duration))
+            if total_duration > self.TIMER_INTERVAL:
+                print("WARNING: current configuration exceed http sending max capability, please decrease rate or DEFAULT_COUNT.")            
 
     def change_http_rate(self, rate):
+        self.queue.empty()
+        self.sent_reqs = 0
+        self.rate_begin_time = time.monotonic()
         self.rate = rate
+
+    def stop(self):
+        self.run_flag = False
+        self.timer.cancel()
 
 clientThread = None
 app = Flask(__name__)
@@ -86,14 +93,17 @@ def start():
     if request.method == "POST":
         data = request.get_json()
         if not clientThread:
+            print("start http traffic: url: {}, rate: {}".format(data["target_url"], data["rate"]))
             clientThread = HttpRequestClient(url = data["target_url"], rate = int(data["rate"]))
-            # clientThread.start()
+            clientThread.start()
             return make_response(("create http traffic client success.", 200))
         else:
             if data["target_url"] == clientThread.url:
+                print("change http traffic rate: {}".format(data["rate"]))
                 clientThread.change_http_rate(int(data["rate"]))
                 return make_response(("change http traffic client rate success.", 200))
             else:
+                print("target url are different from original one.")
                 return make_response(("target url are different from original one.", 400))
     else:
         if clientThread:
@@ -111,10 +121,12 @@ def stop():
     data = request.get_json()
     if clientThread:
         if data["target_url"] == clientThread.url:
+            print("stop http traffic.")
             clientThread.stop()
             clientThread = None
             return make_response(("stop http traffic client success.", 200))
         else:
+            print("target url are different from original one.")
             return make_response(("target url are different from original one.", 400))
 
     return make_response(("please start http traffic client first.", 400))

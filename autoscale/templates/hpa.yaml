@@ -3,7 +3,7 @@
 apiVersion: autoscaling/v1
 kind: HorizontalPodAutoscaler
 metadata:
-  name: {{ .Values.serverName }}-svc
+  name: {{ .Values.serverName }}-hpa
   labels:
     {{- include "autoscale.labels" . | nindent 4 }}
 spec:
@@ -19,7 +19,7 @@ spec:
 apiVersion: autoscaling/v2beta1
 kind: HorizontalPodAutoscaler
 metadata:
-  name: {{ include "autoscale.fullname" . }}
+  name: {{ .Values.serverName }}-hpa
   labels:
     {{- include "autoscale.labels" . | nindent 4 }}
 spec:
