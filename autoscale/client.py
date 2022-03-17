@@ -44,6 +44,7 @@ class HttpRequestClient(Thread):
             cpu_load_duration = 0
             begin = time.monotonic()
             for i in range(request_count):
+                # url format: http://server_svc_ip/cpu?count=10000
                 resp = requests.get(self.url, params={"count": self.DEFAULT_COUNT})
                 cpu_load_duration += float(resp.text)
                 resp.close()

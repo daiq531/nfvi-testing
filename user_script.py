@@ -10,6 +10,7 @@
 #
 
 import time
+import json
 from logging import Logger
 from threading import Thread, Event, Timer
 import requests
@@ -77,7 +78,7 @@ class UserScript(UserScriptV1):
         (str) serverName: identify prefix of server resources deployed from chart file, must be configured with same value
             of serverName key in values.yaml, used to qurey deployed server resources in cluster.
         (list) cpu_util_list: the target cpu utilization of HPA
-        (list) http_rate_list: the list of http rate to be iterated to trigger autoscaling
+        (list) http_rate_list: the list of http rate to be iterated to trigger autoscaling, rate unit: reqs/min
         (int) watch_timeout: timeout seconds value of each watching for utilization and load rate combination
         (int) scaling_query_interval: the interval senconds of querying current scaling status
         (str) autoscaling_version: must be align with HPA version used in Helm chart
@@ -144,7 +145,7 @@ class UserScript(UserScriptV1):
             }
         else:
             raise TestRunError(
-                "unsupported HPA version {}".formant(autoscaler.api_version))
+                "unsupported HPA version {}".format(autoscaler.api_version))
 
         try:
             autoscaler = self.autoscaling_api.patch_namespaced_horizontal_pod_autoscaler(
@@ -165,14 +166,14 @@ class UserScript(UserScriptV1):
     def get_http_client_pod_ip(self):
         client_deployment_name = self.user_args["clientName"] + "-deployment"
         pod_list = self.core_v1_api.list_namespaced_pod(namespace=self.user_args["k8s_namespace"],
-                                             label_selector="app=http-client")
+                                                        label_selector="app=http-client")
         pod = None
         for item in pod_list.items:
             if item.metadata.name.startswith(client_deployment_name):
                 pod = item
         if not pod:
             raise TestRunError("can't find client pod resource.")
-        
+
         return pod.status.pod_ip
 
     '''
@@ -198,15 +199,16 @@ class UserScript(UserScriptV1):
         url = "http://" + self.user_args["platform_svc_ip"] + \
             "/redirect/" + self.http_client_pod_ip + ":8080/start"
         payload = {
-            "target_url": "http://" + self.http_server_svc_ip,
+            "target_url": "http://" + self.http_server_svc_ip + "/cpu",
             "rate": rate
         }
 
         # need to align with http client api definition
         resp = requests.post(url, json=payload)
         if 200 != resp.status_code:
-            self._log("start http client rate fail, err: {}".format(resp.text))
-            raise TestRunError()
+            self._log.error(
+                "start http client rate fail, err: {}".format(resp.text))
+            raise TestRunError("start http client rate fail, err: {}".format(resp.text))
         return
 
     def stop_http_client(self):
@@ -214,13 +216,14 @@ class UserScript(UserScriptV1):
         url = "http://" + self.user_args["platform_svc_ip"] + \
             "/redirect/" + self.http_client_pod_ip + ":8080/stop"
         payload = {
-            "target_url": "http://" + self.http_server_svc_ip,
+            "target_url": "http://" + self.http_server_svc_ip + "/cpu",
         }
         # need to align with http client api definition
         resp = requests.post(url, json=payload)
         if 200 != resp.status_code:
-            self._log("start http client rate fail, err: {}".format(resp.text))
-            raise TestRunError()
+            self._log.error(
+                "stop http client rate fail, err: {}".format(resp.text))
+            raise TestRunError("stop http client rate fail, err: {}".format(resp.text))
         return
 
     def get_deployment_metrics(self, deployment_name) -> list:
@@ -232,13 +235,14 @@ class UserScript(UserScriptV1):
             self.user_args["k8s_namespace"] + '/pods/'
         # response value is a tuple (urllib3.response.HTTPResponse, status_code, HTTPHeaderDict)
         resp = self.api_client.call_api(resource_path, 'GET', auth_settings=['BearerToken'],
-                                        response_type='json', preaload_content=False)
+                                        response_type='json', _preload_content=False)
         # transfer resp body to python dict like below:
         # {'kind': 'PodMetricsList', 'apiVersion': 'metrics.k8s.io/v1beta1', 'metadata': {'selfLink': '/apis/metrics.k8s.io/v1beta1/namespaces/qdai/pods/'}, 'items': [{'metadata': {'name': 'busybox', 'namespace': 'qdai', 'selfLink': '/apis/metrics.k8s.io/v1beta1/namespaces/qdai/pods/busybox', 'creationTimestamp': '2022-03-12T03:00:05Z'}, 'timestamp': '2022-03-12T03:00:05Z', 'window': '5m0s', 'containers': [{'name': 'busybox', 'usage': {'cpu': '0', 'memory': '1076Ki'}}]}, {'metadata': {'name': 'client-pod', 'namespace': 'qdai', 'selfLink': '/apis/metrics.k8s.io/v1beta1/namespaces/qdai/pods/client-pod', 'creationTimestamp': '2022-03-12T03:00:05Z'}, 'timestamp': '2022-03-12T03:00:05Z', 'window': '5m0s', 'containers': [{'name': 'http-client', 'usage': {'cpu': '5m', 'memory': '51388Ki'}}]}, {'metadata': {'name': 'server-deployment-55699d7b-xgvb5', 'namespace': 'qdai', 'selfLink': '/apis/metrics.k8s.io/v1beta1/namespaces/qdai/pods/server-deployment-55699d7b-xgvb5', 'creationTimestamp': '2022-03-12T03:00:05Z'}, 'timestamp': '2022-03-12T03:00:05Z', 'window': '5m0s', 'containers': [{'name': 'autoscale', 'usage': {'cpu': '4m', 'memory': '48836Ki'}}]}, {'metadata': {'name': 'ubuntu', 'namespace': 'qdai', 'selfLink': '/apis/metrics.k8s.io/v1beta1/namespaces/qdai/pods/ubuntu', 'creationTimestamp': '2022-03-12T03:00:05Z'}, 'timestamp': '2022-03-12T03:00:05Z', 'window': '5m0s', 'containers': [{'name': 'ubuntu', 'usage': {'cpu': '0', 'memory': '99776Ki'}}]}]}
         data = json.loads(resp[0].data.decode('utf-8'))
+        self._log.debug("metrics data: {}".format(str(data)))
         pod_metric_list = []
-        for item in items:
-            if item["metadata"]["name"].startswith(self.user_args["serverName" + "-deployment"]):
+        for item in data["items"]:
+            if item["metadata"]["name"].startswith(self.user_args["serverName"] + "-deployment"):
                 pod_metric = {
                     "name": item["metadata"]["name"],
                     "cpu": item["containers"][0]["usage"]["cpu"],
@@ -256,20 +260,35 @@ class UserScript(UserScriptV1):
             "current_replicas": autoscaler.status.current_replicas,
             "desired_replicas": autoscaler.status.desired_replicas
         }
-        if autoscaler.api_version == "v1":
+        if autoscaler.api_version == "autoscaling/v1":
             hpa_status["current_cpu_utilization_percentage"] = autoscaler.status.current_cpu_utilization_percentage
         else:
             raise TestRunError(
-                "unsupported HPA version {}".formant(autoscaler.api_version))
+                "unsupported HPA version {}".format(autoscaler.api_version))
 
         return hpa_status
 
+    def get_server_pods_status(self, deployment_name):
+        pod_list = self.core_v1_api.list_namespaced_pod(namespace=self.user_args["k8s_namespace"])
+        pod_status_list = []
+        for item in pod_list.items:
+            if item.metadata.name.startswith(self.user_args["serverName"] + "-deployment"):
+                pod_status = {
+                    "pod_name": item.metadata.name,
+                    "node": item.spec.node_name,
+                    "phase": item.status.phase
+                }
+                pod_status_list.append(pod_status)
+
+        return pod_status_list
+
     def monitor_hpa_status(self, cpu_util, http_rate):
+        iter_start_time = time.monotonic()
         while True:
             now = time.monotonic()
-            if (now - self.start_time) > self.user_args["watch_timeout"]:
+            if (now - iter_start_time) > self.user_args["watch_timeout"]:
                 self._iq.write(label="Monitor duration timeout",
-                               value="start time: {}, end time: {}".format(self.start_time, now))
+                               value="start time: {}, end time: {}".format(iter_start_time, now))
                 break
 
             # query and output hpa status and pod metrics
@@ -279,11 +298,20 @@ class UserScript(UserScriptV1):
             pod_metric_list = self.get_deployment_metrics(self.deployment_name)
             self._iq.write(label="POD metrics under CPU util: {}, Http rate: {}".format(cpu_util, http_rate),
                            value=str(pod_metric_list))
-            # TODO: query pod and compute node association
+            # query pod and compute node association
+            pod_status_list = self.get_server_pods_status(self.deployment_name)
+            self._iq.write(label="POD node association", value=str(pod_status_list))
 
             # also exit if judge scale complete
-
-            time.sleep(query_interval)
+            '''
+            # below judgement can not be used across different cpu util because it is true when run second cpu_util
+            if (hpa_status["current_replicas"] == hpa_status["desired_replicas"]) \
+                    and (hpa_status["current_replicas"] == len(pod_status_list)):
+                self._iq.write(label="Scaling operation complete",
+                               value="start time: {}, end time: {}".format(iter_start_time, now))
+                break
+            '''
+            time.sleep(int(self.user_args["scaling_query_interval"]))
 
     def run(self, user_args: dict) -> None:
         """ Execute the user script.
@@ -323,6 +351,8 @@ class UserScript(UserScriptV1):
             self._iq.write(label="Start CPU util",
                            value="cpu_util: {}".format(cpu_util))
             self.update_target_cpu_util_in_hpa(cpu_util)
+            # sleep some time to make hpa effective
+            time.sleep(10)
             for http_rate in self.user_args["http_rate_list"]:
                 self._iq.write(label="Start http client rate",
                                value="http_rate: {}".format(http_rate))
@@ -333,7 +363,16 @@ class UserScript(UserScriptV1):
                                value="http_rate: {}".format(http_rate))
             self._iq.write(label="End CPU util",
                            value="cpu_util: {}".format(cpu_util))
+            
+            # stop http traffic until replicas return to 1
+            self._iq.write(label="Stop http client begin under cpu util: {}".format(cpu_util), value="")
+            self.stop_http_client()
+            while True:
+                pod_status_list = self.get_server_pods_status(self.deployment_name)
+                self._iq.write(label="POD status", value=str(pod_status_list))
+                if len(pod_status_list) == 1:
+                    break
+                time.sleep(int(self.user_args["scaling_query_interval"]) * 2)
+            self._iq.write(label="Stop http client end under cpu util: {}".format(cpu_util), value="")
 
         self._iq.write(label="End HPA test", value="")
-
-        self.stop_http_client()
